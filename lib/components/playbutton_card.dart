@@ -128,7 +128,7 @@ class PlaybuttonCard extends HookWidget {
                                 ),
                                 if (isHovered)
                                   Text(
-                                    context.l10n.owned_by_you,
+                                    "Owned by you",
                                     style: theme.textTheme.bodySmall?.copyWith(
                                       color: Colors.white,
                                     ),
