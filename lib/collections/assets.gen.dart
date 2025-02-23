@@ -50,6 +50,7 @@ class Assets {
       AssetGenImage('assets/bengali-patterns-bg.jpg');
   static const AssetGenImage branding = AssetGenImage('assets/branding.png');
   static const AssetGenImage emptyBox = AssetGenImage('assets/empty_box.png');
+  static const AssetGenImage invidious = AssetGenImage('assets/invidious.jpg');
   static const AssetGenImage jiosaavn = AssetGenImage('assets/jiosaavn.png');
   static const AssetGenImage likedTracks =
       AssetGenImage('assets/liked-tracks.jpg');
@@ -60,6 +61,8 @@ class Assets {
       AssetGenImage('assets/spotube-hero-banner.png');
   static const AssetGenImage spotubeLogoForeground =
       AssetGenImage('assets/spotube-logo-foreground.jpg');
+  static const AssetGenImage spotubeLogoBmp =
+      AssetGenImage('assets/spotube-logo.bmp');
   static const String spotubeLogoIco = 'assets/spotube-logo.ico';
   static const AssetGenImage spotubeLogoPng =
       AssetGenImage('assets/spotube-logo.png');
@@ -95,11 +98,13 @@ class Assets {
         bengaliPatternsBg,
         branding,
         emptyBox,
+        invidious,
         jiosaavn,
         likedTracks,
         placeholder,
         spotubeHeroBanner,
         spotubeLogoForeground,
+        spotubeLogoBmp,
         spotubeLogoIco,
         spotubeLogoPng,
         spotubeLogoSvg,
@@ -148,7 +153,7 @@ class AssetGenImage {
     ImageRepeat repeat = ImageRepeat.noRepeat,
     Rect? centerSlice,
     bool matchTextDirection = false,
-    bool gaplessPlayback = false,
+    bool gaplessPlayback = true,
     bool isAntiAlias = false,
     String? package,
     FilterQuality filterQuality = FilterQuality.low,

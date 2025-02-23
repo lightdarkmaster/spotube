@@ -5,17 +5,14 @@ import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:palette_generator/palette_generator.dart';
 import 'package:spotube/collections/spotube_icons.dart';
-import 'package:spotube/components/player/player_controls.dart';
-import 'package:spotube/components/player/player_queue.dart';
-import 'package:spotube/components/root/sidebar.dart';
-import 'package:spotube/components/shared/fallbacks/anonymous_fallback.dart';
-import 'package:spotube/components/shared/page_window_title_bar.dart';
+import 'package:spotube/modules/player/player_controls.dart';
+import 'package:spotube/modules/player/player_queue.dart';
+import 'package:spotube/modules/root/sidebar.dart';
 import 'package:spotube/extensions/context.dart';
 import 'package:spotube/hooks/utils/use_force_update.dart';
 import 'package:spotube/pages/lyrics/plain_lyrics.dart';
 import 'package:spotube/pages/lyrics/synced_lyrics.dart';
-import 'package:spotube/provider/authentication_provider.dart';
-import 'package:spotube/provider/proxy_playlist/proxy_playlist_provider.dart';
+import 'package:spotube/provider/audio_player/audio_player.dart';
 import 'package:spotube/utils/platform.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -31,7 +28,7 @@ class MiniLyricsPage extends HookConsumerWidget {
     final update = useForceUpdate();
     final wasMaximized = useRef<bool>(false);
 
-    final playlistQueue = ref.watch(proxyPlaylistProvider);
+    final playlistQueue = ref.watch(audioPlayerProvider);
 
     final areaActive = useState(false);
     final hoverMode = useState(true);
@@ -46,14 +43,7 @@ class MiniLyricsPage extends HookConsumerWidget {
       return null;
     }, []);
 
-    final auth = ref.watch(authenticationProvider);
-
-    if (auth == null) {
-      return const Scaffold(
-        appBar: PageWindowTitleBar(),
-        body: AnonymousFallback(),
-      );
-    }
+  
 
     return MouseRegion(
       onEnter: !hoverMode.value
@@ -81,12 +71,13 @@ class MiniLyricsPage extends HookConsumerWidget {
               firstChild: DragToMoveArea(
                 child: Row(
                   children: [
-                    const SizedBox(width: 10),
-                    SizedBox(
-                      height: 30,
-                      width: 30,
-                      child: Sidebar.brandLogo(),
-                    ),
+                    const Gap(10),
+                    if (!kIsMacOS)
+                      SizedBox(
+                        height: 30,
+                        width: 30,
+                        child: Sidebar.brandLogo(),
+                      ),
                     const Spacer(),
                     if (showLyrics.value)
                       SizedBox(
@@ -107,8 +98,7 @@ class MiniLyricsPage extends HookConsumerWidget {
                           : const Icon(SpotubeIcons.lyricsOff),
                       style: ButtonStyle(
                         foregroundColor: showLyrics.value
-                            ? MaterialStateProperty.all(
-                                theme.colorScheme.primary)
+                            ? WidgetStateProperty.all(theme.colorScheme.primary)
                             : null,
                       ),
                       onPressed: () async {
@@ -132,8 +122,7 @@ class MiniLyricsPage extends HookConsumerWidget {
                           : const Icon(SpotubeIcons.hoverOff),
                       style: ButtonStyle(
                         foregroundColor: hoverMode.value
-                            ? MaterialStateProperty.all(
-                                theme.colorScheme.primary)
+                            ? WidgetStateProperty.all(theme.colorScheme.primary)
                             : null,
                       ),
                       onPressed: () async {
@@ -154,7 +143,7 @@ class MiniLyricsPage extends HookConsumerWidget {
                             ),
                             style: ButtonStyle(
                               foregroundColor: snapshot.data == true
-                                  ? MaterialStateProperty.all(
+                                  ? WidgetStateProperty.all(
                                       theme.colorScheme.primary)
                                   : null,
                             ),
@@ -186,12 +175,12 @@ class MiniLyricsPage extends HookConsumerWidget {
                   child: TabBarView(
                     children: [
                       SyncedLyrics(
-                        palette: PaletteColor(theme.colorScheme.background, 0),
+                        palette: PaletteColor(theme.colorScheme.surface, 0),
                         isModal: true,
                         defaultTextZoom: 65,
                       ),
                       PlainLyrics(
-                        palette: PaletteColor(theme.colorScheme.background, 0),
+                        palette: PaletteColor(theme.colorScheme.surface, 0),
                         isModal: true,
                         defaultTextZoom: 65,
                       ),
@@ -230,14 +219,13 @@ class MiniLyricsPage extends HookConsumerWidget {
                                 builder: (context) {
                                   return Consumer(builder: (context, ref, _) {
                                     final playlist =
-                                        ref.watch(proxyPlaylistProvider);
+                                        ref.watch(audioPlayerProvider);
 
-                                    return PlayerQueue
-                                        .fromProxyPlaylistNotifier(
+                                    return PlayerQueue.fromAudioPlayerNotifier(
                                       floating: true,
                                       playlist: playlist,
                                       notifier: ref
-                                          .read(proxyPlaylistProvider.notifier),
+                                          .read(audioPlayerProvider.notifier),
                                     );
                                   });
                                 },
@@ -245,7 +233,7 @@ class MiniLyricsPage extends HookConsumerWidget {
                             }
                           : null,
                     ),
-                    Flexible(child: PlayerControls(compact: true)),
+                    const Flexible(child: PlayerControls(compact: true)),
                     IconButton(
                       tooltip: context.l10n.exit_mini_player,
                       icon: const Icon(SpotubeIcons.maximize),

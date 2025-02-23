@@ -1,12 +1,17 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:go_router/go_router.dart';
 import 'package:html/dom.dart' hide Text;
 import 'package:spotify/spotify.dart';
-import 'package:spotube/components/library/user_local_tracks.dart';
-import 'package:spotube/components/root/update_dialog.dart';
-import 'package:spotube/models/logger.dart';
+import 'package:spotube/modules/library/user_local_tracks.dart';
+import 'package:spotube/modules/root/update_dialog.dart';
+
 import 'package:spotube/models/lyrics.dart';
+import 'package:spotube/provider/database/database.dart';
 import 'package:spotube/services/dio/dio.dart';
+import 'package:spotube/services/logger/logger.dart';
 import 'package:spotube/services/sourced_track/sourced_track.dart';
 
 import 'package:spotube/utils/primitive_utils.dart';
@@ -20,12 +25,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:spotube/collections/env.dart';
 
-import 'package:spotube/provider/user_preferences/user_preferences_provider.dart';
 import 'package:version/version.dart';
 
 abstract class ServiceUtils {
-  static final logger = getLogger("ServiceUtils");
-
   static final _englishMatcherRegex = RegExp(
     "^[a-zA-Z0-9\\s!\"#\$%&\\'()*+,-.\\/:;<=>?@\\[\\]^_`{|}~]*\$",
   );
@@ -194,8 +196,6 @@ abstract class ServiceUtils {
       artists: artistNames,
     );
 
-    logger.v("[Searching Subtitle] $query");
-
     final searchUri = Uri.parse("$baseUri/subtitles4songs.aspx").replace(
       queryParameters: {"q": query},
     );
@@ -227,15 +227,12 @@ abstract class ServiceUtils {
 
     // not result was found at all
     if (rateSortedResults.first["points"] == 0) {
-      logger.e("[Subtitle not found] ${track.name}");
       return Future.error("Subtitle lookup failed", StackTrace.current);
     }
 
     final topResult = rateSortedResults.first["result"] as Element;
     final subtitleUri =
         Uri.parse("$baseUri/${topResult.attributes["href"]}&type=lrc");
-
-    logger.v("[Selected subtitle] ${topResult.text} | $subtitleUri");
 
     final lrcDocument = parser.parse((await globalDio.getUri(
       subtitleUri,
@@ -392,7 +389,14 @@ abstract class ServiceUtils {
     WidgetRef ref,
   ) async {
     if (!Env.enableUpdateChecker) return;
-    if (!ref.read(userPreferencesProvider.select((s) => s.checkUpdate))) return;
+    final database = ref.read(databaseProvider);
+    final checkUpdate = await (database.selectOnly(database.preferencesTable)
+          ..addColumns([database.preferencesTable.checkUpdate])
+          ..where(database.preferencesTable.id.equals(0)))
+        .map((row) => row.read(database.preferencesTable.checkUpdate))
+        .getSingleOrNull();
+
+    if (checkUpdate == false) return;
     final packageInfo = await PackageInfo.fromPlatform();
 
     if (Env.releaseChannel == ReleaseChannel.nightly) {
@@ -447,6 +451,29 @@ abstract class ServiceUtils {
           return RootAppUpdateDialog(version: latestVersion);
         },
       );
+    }
+  }
+
+  /// Spotify Images are always JPEGs
+  static Future<Uint8List?> downloadImage(
+    String imageUrl,
+  ) async {
+    try {
+      final fileStream = DefaultCacheManager().getImageFile(imageUrl);
+
+      final bytes = List<int>.empty(growable: true);
+
+      await for (final data in fileStream) {
+        if (data is FileInfo) {
+          bytes.addAll(data.file.readAsBytesSync());
+          break;
+        }
+      }
+
+      return Uint8List.fromList(bytes);
+    } catch (e, stackTrace) {
+      AppLogger.reportError(e, stackTrace);
+      return null;
     }
   }
 }

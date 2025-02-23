@@ -37,16 +37,28 @@ class SearchNotifier<Y> extends AutoDisposeFamilyPaginatedAsyncNotifier<Y,
 
   @override
   fetch(arg, offset, limit) async {
-    if (state.value == null) return [];
+    if (state.value == null) {
+      return (
+        items: <Y>[],
+        hasMore: false,
+        nextOffset: 0,
+      );
+    }
     final results = await spotify.search
         .get(
           ref.read(searchTermStateProvider),
           types: [arg],
-          market: ref.read(userPreferencesProvider).recommendationMarket,
+          market: ref.read(userPreferencesProvider).market,
         )
         .getPage(limit, offset);
 
-    return results.expand((e) => e.items ?? <Y>[]).toList().cast<Y>();
+    final items = results.expand((e) => e.items ?? <Y>[]).toList().cast<Y>();
+
+    return (
+      items: items,
+      hasMore: items.length == limit,
+      nextOffset: offset + limit,
+    );
   }
 
   @override
@@ -56,16 +68,16 @@ class SearchNotifier<Y> extends AutoDisposeFamilyPaginatedAsyncNotifier<Y,
     ref.watch(searchTermStateProvider);
     ref.watch(spotifyProvider);
     ref.watch(
-      userPreferencesProvider.select((value) => value.recommendationMarket),
+      userPreferencesProvider.select((value) => value.market),
     );
 
-    final results = await fetch(arg, 0, 10);
+    final (:items, :hasMore, :nextOffset) = await fetch(arg, 0, 10);
 
     return SearchState<Y>(
-      items: results,
-      offset: 0,
+      items: items,
+      offset: nextOffset,
       limit: 10,
-      hasMore: results.length == 10,
+      hasMore: hasMore,
     );
   }
 }

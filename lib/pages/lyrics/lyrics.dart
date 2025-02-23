@@ -6,10 +6,9 @@ import 'package:gap/gap.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import 'package:spotube/collections/spotube_icons.dart';
-import 'package:spotube/components/shared/fallbacks/anonymous_fallback.dart';
-import 'package:spotube/components/shared/page_window_title_bar.dart';
-import 'package:spotube/components/shared/image/universal_image.dart';
-import 'package:spotube/components/shared/themed_button_tab_bar.dart';
+import 'package:spotube/components/titlebar/titlebar.dart';
+import 'package:spotube/components/image/universal_image.dart';
+import 'package:spotube/components/themed_button_tab_bar.dart';
 import 'package:spotube/extensions/constrains.dart';
 import 'package:spotube/extensions/context.dart';
 import 'package:spotube/extensions/image.dart';
@@ -17,8 +16,7 @@ import 'package:spotube/hooks/utils/use_custom_status_bar_color.dart';
 import 'package:spotube/hooks/utils/use_palette_color.dart';
 import 'package:spotube/pages/lyrics/plain_lyrics.dart';
 import 'package:spotube/pages/lyrics/synced_lyrics.dart';
-import 'package:spotube/provider/authentication_provider.dart';
-import 'package:spotube/provider/proxy_playlist/proxy_playlist_provider.dart';
+import 'package:spotube/provider/audio_player/audio_player.dart';
 import 'package:spotube/utils/platform.dart';
 import 'package:spotube/provider/spotify/spotify.dart';
 
@@ -30,7 +28,7 @@ class LyricsPage extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, ref) {
-    final playlist = ref.watch(proxyPlaylistProvider);
+    final playlist = ref.watch(audioPlayerProvider);
     String albumArt = useMemoized(
       () => (playlist.activeTrack?.album?.images).asUrlString(
         index: (playlist.activeTrack?.album?.images?.length ?? 1) - 1,
@@ -40,10 +38,11 @@ class LyricsPage extends HookConsumerWidget {
     );
     final palette = usePaletteColor(albumArt, ref);
     final mediaQuery = MediaQuery.of(context);
+    final route = ModalRoute.of(context);
 
-    useCustomStatusBarColor(
+    final resetStatusBar = useCustomStatusBarColor(
       palette.color,
-      true,
+      route?.isCurrent ?? false,
       noSetBGColor: true,
     );
 
@@ -62,7 +61,7 @@ class LyricsPage extends HookConsumerWidget {
           const Spacer(),
           Consumer(
             builder: (context, ref, child) {
-              final playback = ref.watch(proxyPlaylistProvider);
+              final playback = ref.watch(audioPlayerProvider);
               final lyric =
                   ref.watch(syncedLyricsProvider(playback.activeTrack));
               final providerName = lyric.asData?.value.provider;
@@ -73,7 +72,7 @@ class LyricsPage extends HookConsumerWidget {
 
               return Align(
                 alignment: Alignment.bottomRight,
-                child: Text("Powered by $providerName"),
+                child: Text(context.l10n.powered_by_provider(providerName)),
               );
             },
           ),
@@ -82,63 +81,58 @@ class LyricsPage extends HookConsumerWidget {
       ),
     );
 
-    final auth = ref.watch(authenticationProvider);
-
-    if (auth == null) {
-      return Scaffold(
-        appBar: !kIsMacOS && !isModal ? const PageWindowTitleBar() : null,
-        body: const AnonymousFallback(),
-      );
-    }
-
     if (isModal) {
-      return DefaultTabController(
-        length: 2,
-        child: SafeArea(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-            child: Container(
-              clipBehavior: Clip.hardEdge,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.background.withOpacity(.4),
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(10),
-                  topRight: Radius.circular(10),
+      return PopScope(
+        canPop: true,
+        onPopInvokedWithResult: (_, __) => resetStatusBar(),
+        child: DefaultTabController(
+          length: 2,
+          child: SafeArea(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+              child: Container(
+                clipBehavior: Clip.hardEdge,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface.withOpacity(.4),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(10),
+                    topRight: Radius.circular(10),
+                  ),
                 ),
-              ),
-              child: Column(
-                children: [
-                  const SizedBox(height: 5),
-                  Container(
-                    height: 7,
-                    width: 150,
-                    decoration: BoxDecoration(
-                      color: palette.titleTextColor,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  AppBar(
-                    leadingWidth: double.infinity,
-                    leading: tabbar,
-                    backgroundColor: Colors.transparent,
-                    automaticallyImplyLeading: false,
-                    actions: [
-                      IconButton(
-                        icon: const Icon(SpotubeIcons.minimize),
-                        onPressed: () => Navigator.of(context).pop(),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 5),
+                    Container(
+                      height: 7,
+                      width: 150,
+                      decoration: BoxDecoration(
+                        color: palette.titleTextColor,
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      const SizedBox(width: 5),
-                    ],
-                  ),
-                  Expanded(
-                    child: TabBarView(
-                      children: [
-                        SyncedLyrics(palette: palette, isModal: isModal),
-                        PlainLyrics(palette: palette, isModal: isModal),
+                    ),
+                    AppBar(
+                      leadingWidth: double.infinity,
+                      leading: tabbar,
+                      backgroundColor: Colors.transparent,
+                      automaticallyImplyLeading: false,
+                      actions: [
+                        IconButton(
+                          icon: const Icon(SpotubeIcons.minimize),
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                        const SizedBox(width: 5),
                       ],
                     ),
-                  ),
-                ],
+                    Expanded(
+                      child: TabBarView(
+                        children: [
+                          SyncedLyrics(palette: palette, isModal: isModal),
+                          PlainLyrics(palette: palette, isModal: isModal),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

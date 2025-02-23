@@ -4,11 +4,11 @@ import 'package:gap/gap.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:spotube/collections/assets.gen.dart';
 import 'package:spotube/collections/spotube_icons.dart';
-import 'package:spotube/components/getting_started/blur_card.dart';
+import 'package:spotube/models/database/database.dart';
+import 'package:spotube/modules/getting_started/blur_card.dart';
 import 'package:spotube/extensions/context.dart';
 import 'package:spotube/extensions/string.dart';
 import 'package:spotube/provider/user_preferences/user_preferences_provider.dart';
-import 'package:spotube/provider/user_preferences/user_preferences_state.dart';
 
 final audioSourceToIconMap = {
   AudioSource.youtube: const Icon(
@@ -17,6 +17,10 @@ final audioSourceToIconMap = {
     size: 30,
   ),
   AudioSource.piped: const Icon(SpotubeIcons.piped, size: 30),
+  AudioSource.invidious: ClipRRect(
+    borderRadius: BorderRadius.circular(48),
+    child: Assets.invidious.image(width: 48, height: 48),
+  ),
   AudioSource.jiosaavn: Assets.jiosaavn.image(width: 48, height: 48),
 };
 
@@ -45,6 +49,7 @@ class GettingStartedPagePlaybackSection extends HookConsumerWidget {
               AudioSource.jiosaavn:
                   "${context.l10n.jiosaavn_source_description}\n"
                       "${context.l10n.highest_quality("320kbps mp")}",
+              AudioSource.invidious: context.l10n.invidious_source_description,
             },
         []);
 
@@ -104,7 +109,9 @@ class GettingStartedPagePlaybackSection extends HookConsumerWidget {
               title: Align(
                 alignment: switch (preferences.audioSource) {
                   AudioSource.youtube => Alignment.centerLeft,
-                  AudioSource.piped => Alignment.center,
+                  AudioSource.piped ||
+                  AudioSource.invidious =>
+                    Alignment.center,
                   AudioSource.jiosaavn => Alignment.centerRight,
                 },
                 child: Text(

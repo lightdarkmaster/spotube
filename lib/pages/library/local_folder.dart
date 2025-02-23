@@ -1,4 +1,8 @@
+import 'dart:io';
+import 'dart:math';
+
 import 'package:collection/collection.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:fuzzywuzzy/fuzzywuzzy.dart';
@@ -6,18 +10,21 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 import 'package:spotube/collections/fake.dart';
 import 'package:spotube/collections/spotube_icons.dart';
-import 'package:spotube/components/library/user_local_tracks.dart';
-import 'package:spotube/components/shared/expandable_search/expandable_search.dart';
-import 'package:spotube/components/shared/fallbacks/not_found.dart';
-import 'package:spotube/components/shared/inter_scrollbar/inter_scrollbar.dart';
-import 'package:spotube/components/shared/page_window_title_bar.dart';
-import 'package:spotube/components/shared/sort_tracks_dropdown.dart';
-import 'package:spotube/components/shared/track_tile/track_tile.dart';
+import 'package:spotube/extensions/string.dart';
+import 'package:spotube/modules/library/local_folder/cache_export_dialog.dart';
+import 'package:spotube/modules/library/user_local_tracks.dart';
+import 'package:spotube/components/expandable_search/expandable_search.dart';
+import 'package:spotube/components/fallbacks/not_found.dart';
+import 'package:spotube/components/inter_scrollbar/inter_scrollbar.dart';
+import 'package:spotube/components/titlebar/titlebar.dart';
+import 'package:spotube/components/sort_tracks_dropdown.dart';
+import 'package:spotube/components/track_tile/track_tile.dart';
 import 'package:spotube/extensions/artist_simple.dart';
 import 'package:spotube/extensions/context.dart';
 import 'package:spotube/models/local_track.dart';
 import 'package:spotube/provider/local_tracks/local_tracks_provider.dart';
-import 'package:spotube/provider/proxy_playlist/proxy_playlist_provider.dart';
+import 'package:spotube/provider/audio_player/audio_player.dart';
+import 'package:spotube/provider/user_preferences/user_preferences_provider.dart';
 import 'package:spotube/utils/service_utils.dart';
 
 class LocalLibraryPage extends HookConsumerWidget {
@@ -25,21 +32,28 @@ class LocalLibraryPage extends HookConsumerWidget {
 
   final String location;
   final bool isDownloads;
-  const LocalLibraryPage(this.location, {super.key, this.isDownloads = false});
+  final bool isCache;
+  const LocalLibraryPage(
+    this.location, {
+    super.key,
+    this.isDownloads = false,
+    this.isCache = false,
+  });
 
   Future<void> playLocalTracks(
     WidgetRef ref,
     List<LocalTrack> tracks, {
     LocalTrack? currentTrack,
   }) async {
-    final playlist = ref.read(proxyPlaylistProvider);
-    final playback = ref.read(proxyPlaylistProvider.notifier);
+    final playlist = ref.read(audioPlayerProvider);
+    final playback = ref.read(audioPlayerProvider.notifier);
     currentTrack ??= tracks.first;
     final isPlaylistPlaying = playlist.containsTracks(tracks);
     if (!isPlaylistPlaying) {
+      var indexWhere = tracks.indexWhere((s) => s.id == currentTrack?.id);
       await playback.load(
         tracks,
-        initialIndex: tracks.indexWhere((s) => s.id == currentTrack?.id),
+        initialIndex: indexWhere,
         autoPlay: true,
       );
     } else if (isPlaylistPlaying &&
@@ -51,8 +65,10 @@ class LocalLibraryPage extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, ref) {
+    final ThemeData(:textTheme) = Theme.of(context);
+
     final sortBy = useState<SortBy>(SortBy.none);
-    final playlist = ref.watch(proxyPlaylistProvider);
+    final playlist = ref.watch(audioPlayerProvider);
     final trackSnapshot = ref.watch(localTracksProvider);
     final isPlaylistPlaying = playlist.containsTracks(
         trackSnapshot.asData?.value.values.flattened.toList() ?? []);
@@ -64,14 +80,133 @@ class LocalLibraryPage extends HookConsumerWidget {
 
     final controller = useScrollController();
 
+    final directorySize = useMemoized(() async {
+      final dir = Directory(location);
+      final files = await dir.list(recursive: true).toList();
+
+      final filesLength =
+          await Future.wait(files.whereType<File>().map((e) => e.length()));
+
+      return (filesLength.sum.toInt() / pow(10, 9)).toStringAsFixed(2);
+    }, [location]);
+
     return SafeArea(
       bottom: false,
       child: Scaffold(
           appBar: PageWindowTitleBar(
             leading: const BackButton(),
             centerTitle: true,
-            title: Text(isDownloads ? context.l10n.downloads : location),
+            title: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isDownloads
+                      ? context.l10n.downloads
+                      : isCache
+                          ? context.l10n.cache_folder.capitalize()
+                          : location,
+                  style: textTheme.titleLarge,
+                ),
+                FutureBuilder<String>(
+                  future: directorySize,
+                  builder: (context, snapshot) {
+                    return Text(
+                      "${(snapshot.data ?? 0)} GB",
+                      style: textTheme.labelSmall,
+                    );
+                  },
+                )
+              ],
+            ),
             backgroundColor: Colors.transparent,
+            actions: [
+              if (isCache) ...[
+                IconButton(
+                  iconSize: 16,
+                  icon: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(SpotubeIcons.delete),
+                      Text(
+                        context.l10n.clear_cache,
+                        style: textTheme.labelSmall,
+                      )
+                    ],
+                  ),
+                  onPressed: () async {
+                    final accepted = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog.adaptive(
+                        title: Text(context.l10n.clear_cache_confirmation),
+                        actions: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.of(context).pop(false);
+                            },
+                            child: Text(context.l10n.decline),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              Navigator.of(context).pop(true);
+                            },
+                            child: Text(context.l10n.accept),
+                          ),
+                        ],
+                      ),
+                    );
+
+                    if (accepted ?? false) return;
+
+                    final cacheDir = Directory(
+                      await UserPreferencesNotifier.getMusicCacheDir(),
+                    );
+
+                    if (cacheDir.existsSync()) {
+                      await cacheDir.delete(recursive: true);
+                    }
+                  },
+                ),
+                IconButton(
+                  iconSize: 16,
+                  icon: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(SpotubeIcons.export),
+                      Text(
+                        context.l10n.export,
+                        style: textTheme.labelSmall,
+                      )
+                    ],
+                  ),
+                  onPressed: () async {
+                    final exportPath =
+                        await FilePicker.platform.getDirectoryPath();
+
+                    if (exportPath == null) return;
+                    final exportDirectory = Directory(exportPath);
+
+                    if (!exportDirectory.existsSync()) {
+                      await exportDirectory.create(recursive: true);
+                    }
+
+                    final cacheDir = Directory(
+                        await UserPreferencesNotifier.getMusicCacheDir());
+
+                    if (!context.mounted) return;
+                    await showDialog(
+                      context: context,
+                      builder: (context) {
+                        return LocalFolderCacheExportDialog(
+                          cacheDir: cacheDir,
+                          exportDir: exportDirectory,
+                        );
+                      },
+                    );
+                  },
+                ),
+              ]
+            ],
           ),
           body: Column(
             children: [

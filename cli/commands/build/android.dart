@@ -25,7 +25,8 @@ class AndroidBuildCommand extends Command with BuildCommandCommonSteps {
     );
 
     await dotEnvFile.writeAsString(
-      "\nENABLE_UPDATE_CHECK=0",
+      "\nENABLE_UPDATE_CHECK=0"
+      "\nHIDE_DONATIONS=1",
       mode: FileMode.append,
     );
 
@@ -50,6 +51,7 @@ class AndroidBuildCommand extends Command with BuildCommandCommonSteps {
 
     await shell.run(
       """
+      dart run build_runner clean
       dart run build_runner build --delete-conflicting-outputs
       flutter build appbundle --flavor ${CliEnv.channel.name}
       """,
