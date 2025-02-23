@@ -54,7 +54,7 @@ extension TrackExtensions on Track {
       trackNumber: trackNumber,
       discNumber: discNumber,
       durationMs: durationMs?.toDouble() ?? 0.0,
-      fileSize: BigInt.from(fileLength),
+      fileSize: fileLength,
       trackTotal: album?.tracks?.length ?? 0,
       picture: imageBytes != null
           ? Picture(
